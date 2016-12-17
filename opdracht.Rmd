@@ -1,0 +1,93 @@
+---
+title: "Advanced Data Science - Predictive Analysis"
+author: "Willy Bakker"
+date: "17 december 2016"
+output: html_document
+---
+```{r, messages = FALSE, warning = FALSE, results = 'hide'}
+library(caret)
+library(klaR)
+library(class)
+```
+
+Load the iris dataset. Make `Species` into a binary class attribute so we will classify if a flower is of species Virginica.
+```{r}
+data(iris)
+iris$isVirginica <- iris$Species == "virginica"
+iris$isVirginica <- factor(iris$isVirginica)
+iris$Species <- NULL
+```
+
+Create a logistic model.
+```{r, messages = FALSE, warning = FALSE}
+fit.glm <- glm(isVirginica ~ ., family = binomial, data = iris)
+summary(fit.glm)
+```
+
+Calculate the in-sample accuracy of the logistic model.
+```{r}
+pred <- predict(fit.glm, iris[1:4], type = "response")
+cm <- confusionMatrix(pred > .5, iris$isVirginica)
+cm
+```
+The error rate is `r round((cm$table[2]+cm$table[3])/nrow(iris), 4)`.
+
+Create a Naive Bayes model.
+```{r}
+fit.nb <- NaiveBayes(isVirginica ~ ., data = iris)
+```
+
+Calculate the in-sample accuracy of the Naive Bayes model.
+```{r}
+pred <- predict(fit.nb, iris[1:4])
+cm <- confusionMatrix(pred$class, iris$isVirginica)
+cm
+```
+The error rate is `r round((cm$table[2]+cm$table[3])/nrow(iris), 4)`.
+
+Estime the out-of-sample or generalization error for the logistic, Naive Bayes and kNN model using Leave-One-Out Cross-Validation (LOOCV).
+```{r, messages = FALSE, warning = FALSE}
+error.glm <- rep(0, dim(iris)[1])
+error.nb <- rep(0, dim(iris)[1])
+error.knn <- rep(0, dim(iris)[1])
+for (i in 1:dim(iris)[1]) {
+    fit.glm <- glm(isVirginica ~ ., data = iris[-i, ],  family = "binomial")
+    fit.nb <- NaiveBayes(isVirginica ~ ., data = iris[-i, ]) 
+    pred.glm.isVirginica <- predict.glm(fit.glm, iris[i, ], type = "response") > 0.5
+    pred.nb.isVirginica <- predict(fit.nb, iris[i, 1:4])$class
+    pred.knn.isVirginica <- knn(train = iris[-i, 1:4], test = iris[i, 1:4], cl = iris[-i, 5], k = 11)
+    true.isVirginica <- iris[i, ]$isVirginica
+    if (pred.glm.isVirginica != true.isVirginica) error.glm[i] <- 1
+    if (pred.nb.isVirginica != true.isVirginica) error.nb[i] <- 1
+    if (pred.knn.isVirginica  != true.isVirginica) error.knn[i] <- 1
+}
+```
+The error estimate for the logistic model is `r round(mean(error.glm), 4)` for the Naive Bayes model `r round(mean(error.nb), 4)` and for the kNN model `r round(mean(error.knn), 4)`. So LOOCV general error estimates for the logistic and Naive Bayes model are slightly worse than the in-sample error rates. 
+
+Scale the data. 
+```{r}
+iris.n <- scale(iris[1:4], center = FALSE, scale = TRUE)
+```
+
+```{r}
+iris.n <- cbind(iris.n, iris[5])
+head(iris.n)
+```
+Estimate the generalization error of the logistic and Naive Bayes model for the scaled data. Again use LOOCV.
+```{r, messages = FALSE, warning = FALSE}
+error.glm <- rep(0, dim(iris.n)[1])
+error.nb <- rep(0, dim(iris.n)[1])
+error.knn <- rep(0, dim(iris.n)[1])
+for (i in 1:dim(iris.n)[1]) {
+    fit.glm <- glm(isVirginica ~ ., data = iris.n[-i, ],  family = "binomial")
+    fit.nb <- NaiveBayes(isVirginica ~ ., data = iris.n[-i, ]) 
+    pred.glm.isVirginica <- predict.glm(fit.glm, iris.n[i, ], type = "response") > 0.5
+    pred.nb.isVirginica <- predict(fit.nb, iris.n[i, 1:4])$class
+    pred.knn.isVirginica <- knn(train = iris.n[-i, 1:4], test = iris.n[i, 1:4], cl = iris.n[-i, 5], k = 11)
+    true.isVirginica <- iris.n[i, ]$isVirginica
+    if (pred.glm.isVirginica != true.isVirginica) error.glm[i] <- 1
+    if (pred.nb.isVirginica != true.isVirginica) error.nb[i] <- 1
+    if (pred.knn.isVirginica  != true.isVirginica) error.knn[i] <- 1
+}
+```
+The general error estimates are no better than before. The estimates for the logistic and Naive Bayes models remained the same: `r round(mean(error.glm), 4)` and `r round(mean(error.nb), 4)`. The general error estimate for kNN is even worse than before scaling: `r round(mean(error.knn), 4)`. So scaling the data doesn't seem to improve model accuracy. 
